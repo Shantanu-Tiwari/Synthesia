@@ -34,11 +34,8 @@ export default function Home() {
     setSteps((s) => s.map((step) => ({ ...step, status: "waiting", result: undefined })));
 
     try {
-      // In a production environment, this points to NEXT_PUBLIC_API_URL or relative path.
-      // We assume Next.js API routes or direct FastAPI connection.
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/research/stream?topic=${encodeURIComponent(topic)}`
-        : `http://localhost:8000/api/research/stream?topic=${encodeURIComponent(topic)}`;
+      // Call the Next.js proxy route — API_URL stays server-side and never reaches the browser
+      const url = `/api/research?topic=${encodeURIComponent(topic)}`;
 
       const response = await fetch(url);
       
