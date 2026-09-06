@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-const BACKEND_URL = process.env.API_URL || "http://localhost:8000";
+const BACKEND_URL = (process.env.API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export async function GET(request: NextRequest) {
   const topic = request.nextUrl.searchParams.get("topic");

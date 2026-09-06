@@ -4,6 +4,11 @@ from pydantic import BaseModel
 import asyncio
 from fastapi.responses import StreamingResponse
 import json
+import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from app.agents import build_search_agent, build_reader_agent, writer_chain, critic_chain
 
@@ -13,14 +18,38 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+async def startup_check():
+    grok_key = os.getenv("GROK_API_KEY", "")
+    tavily_key = os.getenv("TAVILY_API_KEY", "")
+    if grok_key:
+        logger.info(f"✅ GROK_API_KEY loaded (starts with: {grok_key[:8]}...)")
+    else:
+        logger.error("❌ GROK_API_KEY is NOT set — agents will fail")
+    if tavily_key:
+        logger.info(f"✅ TAVILY_API_KEY loaded (starts with: {tavily_key[:8]}...)")
+    else:
+        logger.error("❌ TAVILY_API_KEY is NOT set — search agent will fail")
+
 # CORS middleware for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/api/health")
+def health():
+    grok_key = os.getenv("GROK_API_KEY", "")
+    tavily_key = os.getenv("TAVILY_API_KEY", "")
+    return {
+        "status": "ok",
+        "grok_key_set": bool(grok_key),
+        "grok_key_preview": grok_key[:8] + "..." if grok_key else "NOT SET",
+        "tavily_key_set": bool(tavily_key),
+    }
 
 class ResearchRequest(BaseModel):
     topic: str
