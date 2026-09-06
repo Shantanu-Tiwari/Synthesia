@@ -40,7 +40,7 @@ This project is built using a modern full-stack architecture separated into dist
 1. Clone the repository.
 2. Create a `.env` file in the root directory:
    ```env
-   OPENAI_API_KEY=your_openai_api_key
+   GROK_API_KEY=your_grok_api_key
    TAVILY_API_KEY=your_tavily_api_key
    ```
 3. Run the stack using Docker Compose:
