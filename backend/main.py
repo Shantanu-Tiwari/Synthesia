@@ -20,12 +20,12 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_check():
-    grok_key = os.getenv("GROK_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY", "")
     tavily_key = os.getenv("TAVILY_API_KEY", "")
-    if grok_key:
-        logger.info(f"✅ GROK_API_KEY loaded (starts with: {grok_key[:8]}...)")
+    if groq_key:
+        logger.info(f"✅ GROQ_API_KEY loaded (starts with: {groq_key[:8]}...)")
     else:
-        logger.error("❌ GROK_API_KEY is NOT set — agents will fail")
+        logger.error("❌ GROQ_API_KEY is NOT set — agents will fail")
     if tavily_key:
         logger.info(f"✅ TAVILY_API_KEY loaded (starts with: {tavily_key[:8]}...)")
     else:
@@ -42,12 +42,12 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    grok_key = os.getenv("GROK_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY", "")
     tavily_key = os.getenv("TAVILY_API_KEY", "")
     return {
         "status": "ok",
-        "grok_key_set": bool(grok_key),
-        "grok_key_preview": grok_key[:8] + "..." if grok_key else "NOT SET",
+        "groq_key_set": bool(groq_key),
+        "groq_key_preview": groq_key[:8] + "..." if groq_key else "NOT SET",
         "tavily_key_set": bool(tavily_key),
     }
 

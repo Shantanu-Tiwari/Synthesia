@@ -4,6 +4,7 @@ pydantic==2.7.4
 langgraph==0.2.28
 langchain==0.2.14
 langchain-openai==0.1.22
+langchain-groq
 python-dotenv==1.0.1
 tavily-python==0.3.3
 beautifulsoup4==4.12.3

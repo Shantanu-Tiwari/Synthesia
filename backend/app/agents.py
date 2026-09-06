@@ -1,5 +1,5 @@
 from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from app.tools import web_search, scrape_url
@@ -8,24 +8,23 @@ import os
 
 load_dotenv()
 
-# Model setup — using xAI Grok (OpenAI-compatible API)
-# Free tier available at: https://console.x.ai
-llm = ChatOpenAI(
-    model="grok-3-mini",
+# Model setup — using Groq (groq.com) free inference API
+# Fast, free tier available at: https://console.groq.com
+# Runs Llama 3.3 70B — much faster than hosted OpenAI models
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
     temperature=0,
-    base_url="https://api.x.ai/v1",
-    api_key=os.getenv("GROK_API_KEY"),
+    api_key=os.getenv("GROQ_API_KEY"),
 )
 
-
-#1st agent
+# 1st agent
 def build_search_agent():
     return create_react_agent(
         model=llm,
         tools=[web_search]
     )
 
-#2nd agent
+# 2nd agent
 def build_reader_agent():
     return create_react_agent(
         model=llm,
@@ -33,7 +32,7 @@ def build_reader_agent():
     )
 
 
-#writer chain 
+# writer chain 
 
 writer_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are an expert research writer. Write clear, structured and insightful reports."),
@@ -55,7 +54,7 @@ Be detailed, factual and professional."""),
 
 writer_chain = writer_prompt | llm | StrOutputParser()
 
-#critic_chain 
+# critic_chain 
 
 critic_prompt = ChatPromptTemplate.from_messages([
      ("system", "You are a sharp and constructive research critic. Be honest and specific."),
@@ -81,4 +80,3 @@ One line verdict:
 ])
 
 critic_chain = critic_prompt | llm | StrOutputParser()
-
