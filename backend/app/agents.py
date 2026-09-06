@@ -1,4 +1,4 @@
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -18,19 +18,18 @@ llm = ChatOpenAI(
 )
 
 
-#1st agent 
+#1st agent
 def build_search_agent():
-    return create_agent(
-        model = llm,
-        tools= [web_search]
+    return create_react_agent(
+        model=llm,
+        tools=[web_search]
     )
 
-#2nd agent 
-
+#2nd agent
 def build_reader_agent():
-    return create_agent(
-        model = llm,
-        tools = [scrape_url]
+    return create_react_agent(
+        model=llm,
+        tools=[scrape_url]
     )
 
 
