@@ -12,7 +12,7 @@ load_dotenv()
 # Fast, free tier available at: https://console.groq.com
 # Runs Llama 3.3 70B — much faster than hosted OpenAI models
 llm = ChatGroq(
-    model="openai/gpt-oss-120b",
+    model="openai/gpt-oss-20b",
     temperature=0,
     api_key=os.getenv("GROQ_API_KEY"),
 )
