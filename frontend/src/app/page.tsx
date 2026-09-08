@@ -13,14 +13,16 @@ interface PipelineStep {
 }
 
 export default function Home() {
-  const [topic, setTopic] = useState("");
-  const [isRunning, setIsRunning] = useState(false);
-  const [steps, setSteps] = useState<PipelineStep[]>([
+  const initialSteps: PipelineStep[] = [
     { id: "search", label: "Data Aggregation", status: "waiting" },
     { id: "reader", label: "Contextual Analysis", status: "waiting" },
     { id: "writer", label: "Report Synthesis", status: "waiting" },
     { id: "critic", label: "Critical Review", status: "waiting" },
-  ]);
+  ];
+
+  const [topic, setTopic] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
+  const [steps, setSteps] = useState<PipelineStep[]>(initialSteps);
   const [finalReport, setFinalReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latestFeedback, setLatestFeedback] = useState<string | null>(null);
@@ -37,12 +39,11 @@ export default function Home() {
     setLatestFeedback(null);
     setRefinementCount(0);
     setIsRefining(false);
-    setSteps((s) => s.map((step) => ({ ...step, status: "waiting", result: undefined })));
+    // Reset to the original 4 steps (clears any leftover refine steps)
+    setSteps(initialSteps.map((s) => ({ ...s, status: "waiting" as StepStatus, result: undefined })));
 
     try {
-      // Pointing to the Next.js API proxy route to avoid 404s
       const url = `/api/research?topic=${encodeURIComponent(topic)}`;
-
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -56,8 +57,6 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
-
-      // Buffer prevents JSON crashes when large scraped data gets split across network chunks
       let buffer = "";
 
       while (true) {
@@ -66,8 +65,6 @@ export default function Home() {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n\n");
-
-        // Keep the last incomplete chunk in the buffer
         buffer = lines.pop() || "";
 
         for (const line of lines) {
@@ -86,15 +83,17 @@ export default function Home() {
                 return;
               }
 
+              // Update state outside setSteps to avoid nested setState
+              if (data.status === "done" && data.step === "writer") {
+                setFinalReport(data.result);
+              }
+              if (data.status === "done" && data.step === "critic") {
+                setLatestFeedback(data.result);
+              }
+
               setSteps((prev) =>
                 prev.map((s) => {
                   if (s.id === data.step) {
-                    if (data.status === "done" && data.step === "writer") {
-                      setFinalReport(data.result);
-                    }
-                    if (data.status === "done" && data.step === "critic") {
-                      setLatestFeedback(data.result);
-                    }
                     return { ...s, status: data.status as StepStatus, result: data.result };
                   }
                   return s;
@@ -116,14 +115,18 @@ export default function Home() {
     if (!finalReport || !latestFeedback) return;
 
     const newVersion = refinementCount + 1;
+    // Unique ids so each iteration gets its own steps (no duplicate keys)
+    const refineStepId = `refine-${newVersion}`;
+    const criticStepId = `critic-refine-${newVersion}`;
+
     setIsRefining(true);
     setError(null);
 
-    // Add refine + critic steps to the pipeline
+    // Append new uniquely-identified steps (previous steps stay intact)
     setSteps((prev) => [
-      ...prev.filter((s) => s.id !== "refine" && s.id !== "critic-refine"),
-      { id: "refine", label: `Report Refinement v${newVersion + 1}`, status: "waiting" as StepStatus },
-      { id: "critic", label: "Critical Review", status: "waiting" as StepStatus, result: undefined },
+      ...prev,
+      { id: refineStepId, label: `Report Refinement v${newVersion + 1}`, status: "waiting" as StepStatus },
+      { id: criticStepId, label: `Critical Review v${newVersion + 1}`, status: "waiting" as StepStatus },
     ]);
 
     try {
@@ -145,6 +148,12 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
+
+      // Map backend SSE step names → our unique step ids
+      const stepMap: Record<string, string> = {
+        refine: refineStepId,
+        critic: criticStepId,
+      };
 
       while (true) {
         const { value, done } = await reader.read();
@@ -171,15 +180,19 @@ export default function Home() {
                 return;
               }
 
+              // Map backend step name to our unique step id
+              const mappedId = stepMap[data.step] || data.step;
+
+              if (data.status === "done" && data.step === "refine") {
+                setFinalReport(data.result);
+              }
+              if (data.status === "done" && data.step === "critic") {
+                setLatestFeedback(data.result);
+              }
+
               setSteps((prev) =>
                 prev.map((s) => {
-                  if (s.id === data.step) {
-                    if (data.status === "done" && data.step === "refine") {
-                      setFinalReport(data.result);
-                    }
-                    if (data.status === "done" && data.step === "critic") {
-                      setLatestFeedback(data.result);
-                    }
+                  if (s.id === mappedId) {
                     return { ...s, status: data.status as StepStatus, result: data.result };
                   }
                   return s;
@@ -298,7 +311,7 @@ export default function Home() {
                       {step.status === "done" && step.result && (
                         <div className="mt-3 p-4 bg-[var(--muted)] border border-[var(--border)] rounded-md text-sm text-[var(--muted-foreground)] max-h-60 overflow-y-auto overflow-x-hidden whitespace-pre-wrap">
                           <span className="font-semibold block mb-2 text-[var(--foreground)]">Agent Output:</span>
-                          {step.id === "writer" || step.id === "refine" ? (
+                          {step.id === "writer" || step.id.startsWith("refine") ? (
                             "Report drafted successfully. See below for full output."
                           ) : (
                             step.result
