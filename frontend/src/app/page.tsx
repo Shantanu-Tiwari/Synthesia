@@ -34,8 +34,8 @@ export default function Home() {
     setSteps((s) => s.map((step) => ({ ...step, status: "waiting", result: undefined })));
 
     try {
-      // Pointing to the specific stream endpoint 
-      const url = `/api/research/stream?topic=${encodeURIComponent(topic)}`;
+      // Pointing to the Next.js API proxy route to avoid 404s
+      const url = `/api/research?topic=${encodeURIComponent(topic)}`;
 
       const response = await fetch(url);
 
