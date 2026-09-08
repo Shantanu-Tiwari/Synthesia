@@ -5,39 +5,80 @@
   --font-serif: var(--font-outfit), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
-/* Minimalist, monochromatic design system */
+/* ─── Light Theme ─── */
 :root {
-  --background: #ffffff;
+  --background: #f8f9fc;
   --foreground: #111111;
   --border: #e2e8f0;
-  --muted: #f1f5f9;
+  --muted: #ffffff;
   --muted-foreground: #64748b;
   --primary: #000000;
   --primary-foreground: #ffffff;
+  --selection-bg: #c7d2fe;
+  --selection-fg: #1e1b4b;
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.45);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --card-bg: rgba(255, 255, 255, 0.75);
+  --nav-bg: rgba(248, 249, 252, 0.85);
+  --accent: #6366f1;
+  --accent-light: #eef2ff;
 }
 
+/* ─── Dark Theme (OS preference) ─── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #000000;
+    --background: #09090b;
     --foreground: #fafafa;
-    --border: #333333;
-    --muted: #1a1a1a;
+    --border: #27272a;
+    --muted: #18181b;
     --muted-foreground: #a1a1aa;
     --primary: #ffffff;
     --primary-foreground: #000000;
+    --selection-bg: #4f46e5;
+    --selection-fg: #ffffff;
+    --glass-bg: rgba(24, 24, 27, 0.6);
+    --glass-border: rgba(63, 63, 70, 0.35);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --card-bg: rgba(24, 24, 27, 0.7);
+    --nav-bg: rgba(9, 9, 11, 0.85);
+    --accent: #818cf8;
+    --accent-light: #1e1b4b;
   }
 }
 
+/* ─── Dark Theme (manual toggle) ─── */
 :root[data-theme="dark"] {
-  --background: #000000;
+  --background: #09090b;
   --foreground: #fafafa;
-  --border: #333333;
-  --muted: #1a1a1a;
+  --border: #27272a;
+  --muted: #18181b;
   --muted-foreground: #a1a1aa;
   --primary: #ffffff;
   --primary-foreground: #000000;
+  --selection-bg: #4f46e5;
+  --selection-fg: #ffffff;
+  --glass-bg: rgba(24, 24, 27, 0.6);
+  --glass-border: rgba(63, 63, 70, 0.35);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --card-bg: rgba(24, 24, 27, 0.7);
+  --nav-bg: rgba(9, 9, 11, 0.85);
+  --accent: #818cf8;
+  --accent-light: #1e1b4b;
 }
 
+/* ─── Selection Colors ─── */
+::selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+::-moz-selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+/* ─── Base ─── */
 body {
   color: var(--foreground);
   background: var(--background);
@@ -45,15 +86,31 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ─── Glass Card ─── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-nav {
+  background: var(--nav-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ─── Spinner ─── */
 .spinner {
   width: 16px;
   height: 16px;
   border: 2px solid var(--border);
-  border-bottom-color: var(--foreground);
+  border-bottom-color: var(--accent);
   border-radius: 50%;
   display: inline-block;
   box-sizing: border-box;
-  animation: rotation 1s linear infinite;
+  animation: rotation 0.8s linear infinite;
 }
 
 @keyframes rotation {
@@ -61,7 +118,23 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-/* Markdown styling for the report */
+/* ─── Smooth Fade-In ─── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+/* ─── Markdown / Prose ─── */
 .prose h1, .prose h2, .prose h3 {
   font-family: var(--font-serif);
   font-weight: 600;
@@ -71,7 +144,7 @@ body {
 }
 
 .prose p {
-  line-height: 1.7;
+  line-height: 1.75;
   margin-bottom: 1.25rem;
 }
 
@@ -82,10 +155,34 @@ body {
 
 .prose li {
   margin-bottom: 0.5rem;
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
 .prose a {
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 4px;
+  transition: opacity 0.2s;
+}
+
+.prose a:hover {
+  opacity: 0.8;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
 }
