@@ -69,14 +69,11 @@ async def run_research(req: ResearchRequest):
     )
     search_content = search_result['messages'][-1].content
     
-    # 2. Reader
-    # Step 2: Reader (LCEL Chain instead of ReAct Agent)
-    yield f"data: {json.dumps({'step': 'reader', 'status': 'running'})}\n\n"
-    scraped_content = await reader_chain.ainvoke({
+    # 2. Reader (deterministic LCEL chain — no autonomous loop)
+    scraped_content = reader_chain.invoke({
         "topic": topic,
         "search_results": search_content
     })
-    yield f"data: {json.dumps({'step': 'reader', 'status': 'done', 'result': scraped_content})}\n\n"
     
     # 3. Writer
     research_combined = (
