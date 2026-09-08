@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from app.agents import build_search_agent, reader_chain, writer_chain, critic_chain
+from app.agents import build_search_agent, reader_chain, writer_chain, critic_chain, refine_chain
 
 app = FastAPI(
     title="Synthesia API",
@@ -53,6 +53,10 @@ def health():
 
 class ResearchRequest(BaseModel):
     topic: str
+
+class RefineRequest(BaseModel):
+    report: str
+    feedback: str
 
 @app.post("/api/research")
 async def run_research(req: ResearchRequest):
@@ -157,6 +161,42 @@ async def stream_research(topic: str):
 @app.get("/api/research/stream")
 async def stream_research_endpoint(topic: str):
     return StreamingResponse(stream_research(topic), media_type="text/event-stream")
+
+# --- Refine endpoint: rewrite report using critic feedback ---
+
+async def stream_refine(report: str, feedback: str):
+    """Generator for streaming the refine pipeline via SSE."""
+    try:
+        # Step 1: Refine (writer rewrites using critic feedback)
+        yield f"data: {json.dumps({'step': 'refine', 'status': 'running'})}\n\n"
+        refined_report = await refine_chain.ainvoke({
+            "report": report,
+            "feedback": feedback
+        })
+        yield f"data: {json.dumps({'step': 'refine', 'status': 'done', 'result': refined_report})}\n\n"
+        
+        # Rate limit pause
+        await asyncio.sleep(4)
+        
+        # Step 2: Critic re-evaluates the refined report
+        yield f"data: {json.dumps({'step': 'critic', 'status': 'running'})}\n\n"
+        new_feedback = await critic_chain.ainvoke({
+            "report": refined_report
+        })
+        yield f"data: {json.dumps({'step': 'critic', 'status': 'done', 'result': new_feedback})}\n\n"
+        
+        # Final End
+        yield f"data: {json.dumps({'step': 'complete', 'status': 'done'})}\n\n"
+        
+    except Exception as e:
+        yield f"data: {json.dumps({'step': 'error', 'status': 'failed', 'message': str(e)})}\n\n"
+
+@app.post("/api/research/refine")
+async def refine_research_endpoint(req: RefineRequest):
+    return StreamingResponse(
+        stream_refine(req.report, req.feedback),
+        media_type="text/event-stream"
+    )
 
 if __name__ == "__main__":
     import uvicorn

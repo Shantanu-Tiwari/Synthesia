@@ -23,6 +23,9 @@ export default function Home() {
   ]);
   const [finalReport, setFinalReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [latestFeedback, setLatestFeedback] = useState<string | null>(null);
+  const [refinementCount, setRefinementCount] = useState(0);
+  const [isRefining, setIsRefining] = useState(false);
 
   const handleRun = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +34,9 @@ export default function Home() {
     setIsRunning(true);
     setFinalReport(null);
     setError(null);
+    setLatestFeedback(null);
+    setRefinementCount(0);
+    setIsRefining(false);
     setSteps((s) => s.map((step) => ({ ...step, status: "waiting", result: undefined })));
 
     try {
@@ -86,6 +92,9 @@ export default function Home() {
                     if (data.status === "done" && data.step === "writer") {
                       setFinalReport(data.result);
                     }
+                    if (data.status === "done" && data.step === "critic") {
+                      setLatestFeedback(data.result);
+                    }
                     return { ...s, status: data.status as StepStatus, result: data.result };
                   }
                   return s;
@@ -100,6 +109,91 @@ export default function Home() {
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setIsRunning(false);
+    }
+  };
+
+  const handleRefine = async () => {
+    if (!finalReport || !latestFeedback) return;
+
+    const newVersion = refinementCount + 1;
+    setIsRefining(true);
+    setError(null);
+
+    // Add refine + critic steps to the pipeline
+    setSteps((prev) => [
+      ...prev.filter((s) => s.id !== "refine" && s.id !== "critic-refine"),
+      { id: "refine", label: `Report Refinement v${newVersion + 1}`, status: "waiting" as StepStatus },
+      { id: "critic", label: "Critical Review", status: "waiting" as StepStatus, result: undefined },
+    ]);
+
+    try {
+      const response = await fetch("/api/research/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: finalReport, feedback: latestFeedback }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Refine request failed");
+      }
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.substring(6));
+
+              if (data.step === "error") {
+                setError(data.message);
+                setIsRefining(false);
+                return;
+              }
+
+              if (data.step === "complete") {
+                setRefinementCount(newVersion);
+                setIsRefining(false);
+                return;
+              }
+
+              setSteps((prev) =>
+                prev.map((s) => {
+                  if (s.id === data.step) {
+                    if (data.status === "done" && data.step === "refine") {
+                      setFinalReport(data.result);
+                    }
+                    if (data.status === "done" && data.step === "critic") {
+                      setLatestFeedback(data.result);
+                    }
+                    return { ...s, status: data.status as StepStatus, result: data.result };
+                  }
+                  return s;
+                })
+              );
+            } catch (e) {
+              console.error("Failed to parse JSON chunk:", line, e);
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred during refinement.");
+      setIsRefining(false);
     }
   };
 
@@ -204,7 +298,7 @@ export default function Home() {
                       {step.status === "done" && step.result && (
                         <div className="mt-3 p-4 bg-[var(--muted)] border border-[var(--border)] rounded-md text-sm text-[var(--muted-foreground)] max-h-60 overflow-y-auto overflow-x-hidden whitespace-pre-wrap">
                           <span className="font-semibold block mb-2 text-[var(--foreground)]">Agent Output:</span>
-                          {step.id === "writer" ? (
+                          {step.id === "writer" || step.id === "refine" ? (
                             "Report drafted successfully. See below for full output."
                           ) : (
                             step.result
@@ -223,7 +317,14 @@ export default function Home() {
         {finalReport && (
           <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--background)] shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-[var(--muted)] px-6 py-4 border-b border-[var(--border)] flex justify-between items-center">
-              <h2 className="text-sm font-semibold tracking-wide uppercase text-[var(--foreground)]">Synthesized Report</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold tracking-wide uppercase text-[var(--foreground)]">Synthesized Report</h2>
+                {refinementCount > 0 && (
+                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[var(--foreground)] text-[var(--background)]">
+                    v{refinementCount + 1}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleDownload}
                 className="text-sm font-medium hover:underline text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
@@ -233,6 +334,30 @@ export default function Home() {
             </div>
             <div className="p-8 prose prose-neutral max-w-none prose-p:text-[var(--foreground)] prose-headings:text-[var(--foreground)]">
               <ReactMarkdown>{finalReport}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {/* Refine Button */}
+        {finalReport && latestFeedback && !isRunning && !isRefining && (
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={handleRefine}
+              className="group flex items-center gap-2 px-6 py-3 rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] font-medium hover:bg-[var(--muted)] transition-all hover:shadow-sm"
+            >
+              <svg className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refine Report {refinementCount > 0 ? `(v${refinementCount + 1} → v${refinementCount + 2})` : ""}
+            </button>
+          </div>
+        )}
+
+        {isRefining && (
+          <div className="mt-6 flex justify-center">
+            <div className="flex items-center gap-2 px-6 py-3 rounded-md border border-[var(--border)] bg-[var(--muted)] text-[var(--muted-foreground)] font-medium">
+              <span className="spinner"></span>
+              Refining report...
             </div>
           </div>
         )}

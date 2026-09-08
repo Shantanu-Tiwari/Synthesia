@@ -99,3 +99,21 @@ One line verdict:
 ])
 
 critic_chain = critic_prompt | llm_critic | StrOutputParser()
+
+# refine_chain — Takes original report + critic feedback, rewrites to improve
+refine_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are an expert research writer. Revise and improve the report using the critic's feedback."),
+    ("human", """Here is the original research report:
+
+{report}
+
+Here is the critic's feedback:
+
+{feedback}
+
+Rewrite the report, addressing every point in "Areas to Improve" while preserving the strengths.
+Maintain the same structure (Introduction, Key Findings, Conclusion, Sources).
+Be detailed, factual and professional."""),
+])
+
+refine_chain = refine_prompt | llm_writer | StrOutputParser()
