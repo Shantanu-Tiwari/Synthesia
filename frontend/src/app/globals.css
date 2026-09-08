@@ -17,7 +17,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #000000;
     --foreground: #fafafa;
     --border: #333333;
@@ -26,6 +26,16 @@
     --primary: #ffffff;
     --primary-foreground: #000000;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #fafafa;
+  --border: #333333;
+  --muted: #1a1a1a;
+  --muted-foreground: #a1a1aa;
+  --primary: #ffffff;
+  --primary-foreground: #000000;
 }
 
 body {
