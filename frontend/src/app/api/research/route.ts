@@ -1,38 +1,43 @@
+// frontend/src/app/api/research/route.ts
 import { NextRequest } from "next/server";
 
-const BACKEND_URL = (process.env.API_URL || "http://localhost:8000").replace(/\/$/, "");
-
 export async function GET(request: NextRequest) {
-  const topic = request.nextUrl.searchParams.get("topic");
+  const searchParams = request.nextUrl.searchParams;
+  const topic = searchParams.get("topic");
 
   if (!topic) {
-    return new Response(JSON.stringify({ error: "topic is required" }), {
+    return new Response(JSON.stringify({ error: "Topic is required" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" }
     });
   }
 
-  // Proxy the SSE stream from FastAPI — API_URL never touches the browser
-  const backendResponse = await fetch(
-    `${BACKEND_URL}/api/research/stream?topic=${encodeURIComponent(topic)}`,
-    {
-      headers: { Accept: "text/event-stream" },
+  const backendUrl = process.env.API_URL || "http://localhost:8000";
+
+  try {
+    const response = await fetch(`${backendUrl}/api/research/stream?topic=${encodeURIComponent(topic)}`);
+
+    // If FastAPI returns an error (like a 429 or 500), safely pass it through as text
+    if (!response.ok) {
+      const errorText = await response.text();
+      return new Response(
+        `data: ${JSON.stringify({ step: "error", message: errorText || "Backend failure" })}\n\n`,
+        { headers: { "Content-Type": "text/event-stream" } }
+      );
     }
-  );
 
-  if (!backendResponse.ok || !backendResponse.body) {
-    return new Response(JSON.stringify({ error: "Backend unreachable" }), {
-      status: 502,
-      headers: { "Content-Type": "application/json" },
+    return new Response(response.body, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+      },
     });
+  } catch (error: any) {
+    console.error("Proxy connection error:", error);
+    return new Response(
+      `data: ${JSON.stringify({ step: "error", message: "Failed to connect to backend server." })}\n\n`,
+      { headers: { "Content-Type": "text/event-stream" } }
+    );
   }
-
-  // Stream the response back to the browser as SSE
-  return new Response(backendResponse.body, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
 }

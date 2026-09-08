@@ -63,20 +63,22 @@ async def run_research(req: ResearchRequest):
     
     # 1. Search
     search_agent = build_search_agent()
-    search_result = search_agent.invoke({
-        "messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]
-    })
+    search_result = search_agent.invoke(
+        {"messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]},
+        config={"recursion_limit": 3}
+    )
     search_content = search_result['messages'][-1].content
     
     # 2. Reader
     reader_agent = build_reader_agent()
-    reader_result = reader_agent.invoke({
-        "messages": [("user",
+    reader_result = reader_agent.invoke(
+        {"messages": [("user",
             f"Based on the following search results about '{topic}', "
             f"pick the most relevant URL and scrape it for deeper content.\n\n"
             f"Search Results:\n{search_content[:800]}"
-        )]
-    })
+        )]},
+        config={"recursion_limit": 3}
+    )
     scraped_content = reader_result['messages'][-1].content
     
     # 3. Writer
@@ -106,28 +108,30 @@ async def stream_research(topic: str):
     """Generator for streaming Server-Sent Events."""
     
     try:
-        # Step 1: Search
+        # Step 1: Search (Strictly limited to 3 internal turns max)
         yield f"data: {json.dumps({'step': 'search', 'status': 'running'})}\n\n"
         search_agent = build_search_agent()
-        search_result = await search_agent.ainvoke({
-            "messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]
-        })
+        search_result = await search_agent.ainvoke(
+            {"messages" : [("user", f"Find recent, reliable and detailed information about: {topic}. Execute search once and finish.")]},
+            config={"recursion_limit": 3}
+        )
         search_content = search_result['messages'][-1].content
         yield f"data: {json.dumps({'step': 'search', 'status': 'done', 'result': search_content})}\n\n"
         
         # Rate limit pause
         await asyncio.sleep(4) 
         
-        # Step 2: Read
+        # Step 2: Read (Strictly limited to 3 internal turns max)
         yield f"data: {json.dumps({'step': 'reader', 'status': 'running'})}\n\n"
         reader_agent = build_reader_agent()
-        reader_result = await reader_agent.ainvoke({
-            "messages": [("user",
+        reader_result = await reader_agent.ainvoke(
+            {"messages": [("user",
                 f"Based on the following search results about '{topic}', "
                 f"pick the most relevant URL and scrape it for deeper content.\n\n"
                 f"Search Results:\n{search_content[:800]}"
-            )]
-        })
+            )]},
+            config={"recursion_limit": 3}
+        )
         scraped_content = reader_result['messages'][-1].content
         yield f"data: {json.dumps({'step': 'reader', 'status': 'done', 'result': scraped_content})}\n\n"
         
