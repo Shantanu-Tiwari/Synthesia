@@ -108,19 +108,20 @@ async def stream_research(topic: str):
     try:
         # Step 1: Search
         yield f"data: {json.dumps({'step': 'search', 'status': 'running'})}\n\n"
-        await asyncio.sleep(0.1) # tiny sleep to allow flush
         search_agent = build_search_agent()
-        search_result = search_agent.invoke({
+        search_result = await search_agent.ainvoke({
             "messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]
         })
         search_content = search_result['messages'][-1].content
         yield f"data: {json.dumps({'step': 'search', 'status': 'done', 'result': search_content})}\n\n"
         
+        # Rate limit pause
+        await asyncio.sleep(4) 
+        
         # Step 2: Read
         yield f"data: {json.dumps({'step': 'reader', 'status': 'running'})}\n\n"
-        await asyncio.sleep(0.1)
         reader_agent = build_reader_agent()
-        reader_result = reader_agent.invoke({
+        reader_result = await reader_agent.ainvoke({
             "messages": [("user",
                 f"Based on the following search results about '{topic}', "
                 f"pick the most relevant URL and scrape it for deeper content.\n\n"
@@ -130,23 +131,27 @@ async def stream_research(topic: str):
         scraped_content = reader_result['messages'][-1].content
         yield f"data: {json.dumps({'step': 'reader', 'status': 'done', 'result': scraped_content})}\n\n"
         
+        # Rate limit pause
+        await asyncio.sleep(4)
+        
         # Step 3: Write
         yield f"data: {json.dumps({'step': 'writer', 'status': 'running'})}\n\n"
-        await asyncio.sleep(0.1)
         research_combined = (
             f"SEARCH RESULTS : \n {search_content} \n\n"
             f"DETAILED SCRAPED CONTENT : \n {scraped_content}"
         )
-        report = writer_chain.invoke({
+        report = await writer_chain.ainvoke({
             "topic" : topic,
             "research" : research_combined
         })
         yield f"data: {json.dumps({'step': 'writer', 'status': 'done', 'result': report})}\n\n"
         
+        # Rate limit pause
+        await asyncio.sleep(4)
+        
         # Step 4: Critic
         yield f"data: {json.dumps({'step': 'critic', 'status': 'running'})}\n\n"
-        await asyncio.sleep(0.1)
-        feedback = critic_chain.invoke({
+        feedback = await critic_chain.ainvoke({
             "report": report
         })
         yield f"data: {json.dumps({'step': 'critic', 'status': 'done', 'result': feedback})}\n\n"

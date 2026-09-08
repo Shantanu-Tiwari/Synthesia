@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 type StepStatus = "waiting" | "running" | "done" | "error";
@@ -34,11 +34,16 @@ export default function Home() {
     setSteps((s) => s.map((step) => ({ ...step, status: "waiting", result: undefined })));
 
     try {
-      // Call the Next.js proxy route — API_URL stays server-side and never reaches the browser
-      const url = `/api/research?topic=${encodeURIComponent(topic)}`;
+      // Pointing to the specific stream endpoint 
+      const url = `/api/research/stream?topic=${encodeURIComponent(topic)}`;
 
       const response = await fetch(url);
-      
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Network response was not ok");
+      }
+
       if (!response.body) {
         throw new Error("No response body");
       }
@@ -46,39 +51,49 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
 
+      // Buffer prevents JSON crashes when large scraped data gets split across network chunks
+      let buffer = "";
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n\n");
-        
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+
+        // Keep the last incomplete chunk in the buffer
+        buffer = lines.pop() || "";
+
         for (const line of lines) {
           if (line.startsWith("data: ")) {
-            const data = JSON.parse(line.substring(6));
-            
-            if (data.step === "error") {
-              setError(data.message);
-              setIsRunning(false);
-              return;
-            }
+            try {
+              const data = JSON.parse(line.substring(6));
 
-            if (data.step === "complete") {
-              setIsRunning(false);
-              return;
-            }
+              if (data.step === "error") {
+                setError(data.message);
+                setIsRunning(false);
+                return;
+              }
 
-            setSteps((prev) => 
-              prev.map((s) => {
-                if (s.id === data.step) {
-                  if (data.status === "done" && data.step === "writer") {
-                    setFinalReport(data.result);
+              if (data.step === "complete") {
+                setIsRunning(false);
+                return;
+              }
+
+              setSteps((prev) =>
+                prev.map((s) => {
+                  if (s.id === data.step) {
+                    if (data.status === "done" && data.step === "writer") {
+                      setFinalReport(data.result);
+                    }
+                    return { ...s, status: data.status as StepStatus, result: data.result };
                   }
-                  return { ...s, status: data.status as StepStatus, result: data.result };
-                }
-                return s;
-              })
-            );
+                  return s;
+                })
+              );
+            } catch (e) {
+              console.error("Failed to parse JSON chunk:", line, e);
+            }
           }
         }
       }
@@ -103,7 +118,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[var(--background)] selection:bg-neutral-200 dark:selection:bg-neutral-800">
-      
+
       {/* Navigation / Header */}
       <nav className="border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -116,7 +131,7 @@ export default function Home() {
       </nav>
 
       <main className="max-w-4xl mx-auto px-6 py-16">
-        
+
         {/* Hero Section */}
         <div className="mb-12">
           <h1 className="font-[family-name:var(--font-serif)] text-4xl md:text-5xl font-semibold tracking-tight mb-4 text-balance">
@@ -168,7 +183,7 @@ export default function Home() {
               <div className="space-y-6">
                 {steps.map((step, idx) => (
                   <div key={step.id} className="flex items-start gap-4">
-                    <div className="mt-1">
+                    <div className="mt-1 flex-shrink-0">
                       {step.status === "waiting" && <div className="w-5 h-5 rounded-full border-2 border-[var(--border)]" />}
                       {step.status === "running" && <div className="spinner !w-5 !h-5 !border-2" />}
                       {step.status === "done" && (
@@ -179,16 +194,22 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h3 className={`font-medium ${step.status === "waiting" ? "text-[var(--muted-foreground)]" : "text-[var(--foreground)]"}`}>
                         Step {idx + 1}: {step.label}
                       </h3>
                       {step.status === "running" && <p className="text-sm text-[var(--muted-foreground)] mt-1 animate-pulse">Executing agent protocol...</p>}
-                      {step.status === "done" && step.id === "critic" && step.result && (
-                         <div className="mt-3 p-4 bg-[var(--muted)] rounded-md text-sm text-[var(--muted-foreground)]">
-                           <span className="font-semibold block mb-1">Critic Feedback:</span>
-                           {step.result}
-                         </div>
+
+                      {/* Intermediate Data Display */}
+                      {step.status === "done" && step.result && (
+                        <div className="mt-3 p-4 bg-[var(--muted)] border border-[var(--border)] rounded-md text-sm text-[var(--muted-foreground)] max-h-60 overflow-y-auto overflow-x-hidden whitespace-pre-wrap">
+                          <span className="font-semibold block mb-2 text-[var(--foreground)]">Agent Output:</span>
+                          {step.id === "writer" ? (
+                            "Report drafted successfully. See below for full output."
+                          ) : (
+                            step.result
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -200,10 +221,10 @@ export default function Home() {
 
         {/* Final Report */}
         {finalReport && (
-          <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--background)] shadow-sm">
+          <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--background)] shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-[var(--muted)] px-6 py-4 border-b border-[var(--border)] flex justify-between items-center">
               <h2 className="text-sm font-semibold tracking-wide uppercase text-[var(--foreground)]">Synthesized Report</h2>
-              <button 
+              <button
                 onClick={handleDownload}
                 className="text-sm font-medium hover:underline text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
               >
