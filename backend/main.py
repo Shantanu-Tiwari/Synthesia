@@ -115,18 +115,12 @@ async def stream_research(topic: str):
         # Rate limit pause
         await asyncio.sleep(4) 
         
-        # Step 2: Read (Strictly limited to 3 internal turns max)
+        # Step 2: Reader (deterministic LCEL chain — no autonomous loop)
         yield f"data: {json.dumps({'step': 'reader', 'status': 'running'})}\n\n"
-        reader_agent = build_reader_agent()
-        reader_result = await reader_agent.ainvoke(
-            {"messages": [("user",
-                f"Based on the following search results about '{topic}', "
-                f"pick the most relevant URL and scrape it for deeper content.\n\n"
-                f"Search Results:\n{search_content[:800]}"
-            )]},
-            config={"recursion_limit": 3}
-        )
-        scraped_content = reader_result['messages'][-1].content
+        scraped_content = await reader_chain.ainvoke({
+            "topic": topic,
+            "search_results": search_content
+        })
         yield f"data: {json.dumps({'step': 'reader', 'status': 'done', 'result': scraped_content})}\n\n"
         
         # Rate limit pause
