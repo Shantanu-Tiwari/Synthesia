@@ -2,14 +2,13 @@ from langgraph.prebuilt import create_react_agent
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from app.tools import web_search, scrape_url
+from app.tools import web_search
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
 # Separate LLM instances with independent API keys to split the rate-limit load
-# (Falls back to GROQ_API_KEY if specific numbered keys aren't set yet)
 llm_search = ChatGroq(
     model="openai/gpt-oss-20b",
     temperature=0,
@@ -34,20 +33,25 @@ llm_critic = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY_4", os.getenv("GROQ_API_KEY")),
 )
 
-# 1st agent (Uses Key 1)
+# 1st agent: Search (Kept as a controlled ReAct agent)
 def build_search_agent():
     return create_react_agent(
         model=llm_search,
         tools=[web_search]
     )
 
-# 2nd agent (Uses Key 2)
-def build_reader_agent():
-    return create_react_agent(
-        model=llm_reader,
-        tools=[scrape_url]
-    )
+# 2nd step: Reader (Converted from an infinite-loop ReAct agent to a deterministic LCEL chain)
+reader_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are an expert research assistant. Analyze the raw search results and extract deep, structured context relevant to the topic."),
+    ("human", """Analyze the following search results about '{topic}' and extract key technical insights, metrics, and details.
 
+Search Results:
+{search_results}
+
+Provide a comprehensive contextual breakdown of this data."""),
+])
+
+reader_chain = reader_prompt | llm_reader | StrOutputParser()
 
 # writer chain (Uses Key 3)
 writer_prompt = ChatPromptTemplate.from_messages([
@@ -69,7 +73,6 @@ Be detailed, factual and professional."""),
 ])
 
 writer_chain = writer_prompt | llm_writer | StrOutputParser()
-
 
 # critic_chain (Uses Key 4)
 critic_prompt = ChatPromptTemplate.from_messages([

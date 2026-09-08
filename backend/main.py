@@ -70,16 +70,13 @@ async def run_research(req: ResearchRequest):
     search_content = search_result['messages'][-1].content
     
     # 2. Reader
-    reader_agent = build_reader_agent()
-    reader_result = reader_agent.invoke(
-        {"messages": [("user",
-            f"Based on the following search results about '{topic}', "
-            f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{search_content[:800]}"
-        )]},
-        config={"recursion_limit": 3}
-    )
-    scraped_content = reader_result['messages'][-1].content
+    # Step 2: Reader (LCEL Chain instead of ReAct Agent)
+    yield f"data: {json.dumps({'step': 'reader', 'status': 'running'})}\n\n"
+    scraped_content = await reader_chain.ainvoke({
+        "topic": topic,
+        "search_results": search_content
+    })
+    yield f"data: {json.dumps({'step': 'reader', 'status': 'done', 'result': scraped_content})}\n\n"
     
     # 3. Writer
     research_combined = (
