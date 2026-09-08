@@ -110,7 +110,7 @@ async def stream_research(topic: str):
         search_agent = build_search_agent()
         search_result = await search_agent.ainvoke(
             {"messages" : [("user", f"Find recent, reliable and detailed information about: {topic}. Execute search once and finish.")]},
-            config={"recursion_limit": 3}
+            config={"recursion_limit": 25}
         )
         search_content = search_result['messages'][-1].content
         yield f"data: {json.dumps({'step': 'search', 'status': 'done', 'result': search_content})}\n\n"
